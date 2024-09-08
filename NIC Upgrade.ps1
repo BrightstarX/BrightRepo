@@ -1,0 +1,548 @@
+﻿#VMWARE NIC CARD UPGRADE SCRIPT
+#Halil İbrahim Karabacak
+
+cls
+
+$module      = "VMware.VimAutomation.Core"
+
+if (Get-Module -Name $module) {} else {Import-Module  $module
+    Get-Module -Name $module }
+
+
+
+
+Function Function-WriteLog {
+
+     param(
+           [Parameter(Mandatory=$true)]
+           [string]$Message,
+           [Parameter(Mandatory=$true)]
+           [string]$LogLevel
+
+           )
+
+      $LogEntry   =   "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | $Message | $LogLevel "
+      $LogFile = "C:\Users\fb009312\Desktop\Logfile NIC Upgrade.txt"
+
+
+     if ($LogLevel -eq "Info") { 
+
+         Write-Host $LogEntry  -ForegroundColor Green 
+         Add-Content -Path $LogFile -Value $LogEntry            
+     }
+           
+    elseif ($LogLevel -eq "Process"){
+
+            Write-Host "$LogEntry" -ForegroundColor Cyan
+            Add-Content -Path $LogFile -Value $LogEntry                
+    }
+
+
+     else { Write-Host "$LogEntry"  -ForegroundColor Yellow
+            Add-Content -Path $LogFile -Value $LogEntry                          
+    }
+}
+
+
+
+
+
+Function Function-OperationNIC {
+
+           
+      param(
+ 
+            [Parameter(Mandatory=$true)]
+            [string]$VMHostname,
+            [Parameter(Mandatory=$true)]
+            [string]$VMIPAddress,
+            [Parameter(Mandatory=$true)]
+            [string]$VMGateway,
+            [Parameter(Mandatory=$true)]
+            [string]$VMSubnet,
+            [Parameter(Mandatory=$true)]
+            [string]$SourceMACAddress,
+            [Parameter(Mandatory=$true)]
+            [string]$VMPortgroup,
+            [Parameter(Mandatory=$true)]
+            [string]$DNSPrimary,
+            [Parameter(Mandatory=$true)]
+            [string]$DNSSecondary,         
+            [Parameter(Mandatory=$false)]
+            [string]$DNSTertiary,
+            [Parameter(Mandatory=$false)]
+            [string]$DNSQuadra,
+            [Parameter(Mandatory=$true)]
+            [PSCredential]$credvalue,
+            [Parameter(Mandatory=$true)]
+            [VMware.VimAutomation.ViCore.Impl.V1.VIObjectImpl]$snapshot 
+            
+            )
+
+Try {     
+    
+        
+    $preVM            =  $Null
+    $preNetAdapter    =  $Null
+    $OldMacAddress    =  $Null
+    $OldNetAdapter    =  $Null
+    $OldIfIndex       =  $Null
+    $preVM            =  Get-VM $VMHostname -ErrorAction Stop
+    $preNetAdapter    =  Get-NetworkAdapter -VM $VMHostname | Where-Object { $_.MacAddress -eq $SourceMACAddress }
+    $OldMacAddress    =  $SourceMACAddress.Replace(":", "-")
+
+    Function-WriteLog -Message "Getting Interface Index process for the OLD card..." -LogLevel "Process"
+    $OldNetAdapter    =  Invoke-VMScript -VM $VMHostname -GuestCredential $credvalue -ScriptText "Get-NetAdapter | Where-Object MacAddress -eq '$OldMacAddress' | Select-Object -ExpandProperty ifIndex"
+    $OldIfIndex       =  [uint32]::Parse($OldNetAdapter.ScriptOutput)
+
+    if($OldIfIndex){
+ 
+    Function-WriteLog -Message "Old If Index successfully collected, New Vmxnet-3 card adding for $VMHostname..." -LogLevel "Info"
+
+    }
+
+    else{Function-WriteLog -Message "Old Interface Index couldn't collected, nothing changed, snapshot deleting for $VMHostname" -LogLevel "Failure"
+         Remove-Snapshot -Snapshot $snapshot 
+
+    }
+
+ 
+
+ #Here Temporary
+ #$VMHostname="FB000OFS03"
+ #$OldIfIndex="17"
+ #$VMHostname="FB000SAY56"
+ #$OldIfIndex="5"
+
+#DNS Check
+
+    $resultDNS = Invoke-Command -ComputerName $VMHostname -Credential $credSYS -ScriptBlock {      
+    
+               param($OldIfIndex)
+                       
+    Get-DnsClientServerAddress  -AddressFamily IPv4 -InterfaceIndex "$OldIfIndex"
+
+    } -ArgumentList $OldIfIndex
+
+     
+    $DNSCount = $resultDNS.ServerAddresses.Length
+
+
+
+
+    
+#New VMXNET3 Card Adding
+
+    If($preNetAdapter)  {
+       $NewNetAdapter = New-NetworkAdapter -VM $VMHostname -Type Vmxnet3 -NetworkName $VMPortgroup -StartConnected -Confirm:$False -ErrorAction Stop
+    
+    }
+
+    else{ Function-WriteLog -Message "Pre-NetAdapter couldn't get before the add, nothing changed. Snapshot deleting for $VMHostname..." -LogLevel "Failure"
+          Write-Output "`n"   
+          Remove-Snapshot -Snapshot $snapshot      
+    } 
+   
+
+
+#New Interface Index
+
+    Function-WriteLog -Message "Getting Mac Address and Interface Index process for the NEW card..." -LogLevel "Info"
+
+    $NewMACAddress    =  $NewNetAdapter.MacAddress.Replace(":", "-")
+	$NewAdapter       =  Invoke-VMScript -VM $VMHostname -GuestCredential $credvalue -ScriptText "Get-NetAdapter | Where-Object MacAddress -eq '$NewMACAddress' | Select-Object -ExpandProperty ifIndex" -ErrorAction SilentlyContinue
+    $NewIfIndex       =  [uint32]::Parse($NewAdapter.ScriptOutput)
+    Start-Sleep -Milliseconds 500
+
+                                                   
+    If ($NewAdapter) {
+
+    Function-WriteLog -Message "Network configuration setting to new vmxnet-3 card for $VMHostname..." -LogLevel "Process"
+
+
+#Cleaning IP-GW-DNS / Disable IPv6 / Setting IP-Subnet-GW-DNS (New Card)
+
+
+$Script1=@"
+Get-NetIPAddress   -InterfaceIndex $OldIfIndex | Remove-NetIPAddress -Confirm:$false
+Get-NetIPInterface -InterfaceIndex $OldIfIndex | Remove-NetRoute -Confirm:$false
+Set-NetIPInterface -InterfaceIndex $OldIfIndex -Dhcp Enabled
+Set-DnsClientServerAddress -InterfaceIndex $OldIfIndex -ResetServerAddresses
+netsh interface ipv4 set address name=$NewIfIndex static $VMIPAddress $VMSubnet $VMGateway
+netsh interface ip set dns name="$NewIfIndex" source=static addr=$DNSPrimary primary
+netsh interface ip add dns name="$NewIfIndex” addr=$DNSSecondary index=2
+Disable-NetAdapterBinding -Name "*" -ComponentID "ms_tcpip6"
+"@
+
+    $Exec1 = Invoke-VMScript -ScriptText $Script1 -VM $VMHostname -GuestCredential $credvalue
+    Start-Sleep -Milliseconds 850
+
+
+
+
+#Multiple DNS Set
+
+    if ($DNSCount -eq "3") {
+
+    Function-WriteLog -Message "There are 3 DNS detected, and setting to new card..." -LogLevel "Info"
+
+$DNS3=@"
+netsh interface ip add dns name="$NewIfIndex" addr=$DNSTertiary index=3
+"@
+    
+    $Exec3 = Invoke-VMScript -ScriptText $DNS3 -VM $VMHostname -GuestCredential $credvalue }
+  
+    
+
+    elseif ($DNSCount -eq "4") {
+
+
+    Function-WriteLog -Message "There are 4 DNS detected, and setting to new card..." -LogLevel "Info"
+
+$DNS4=@"
+netsh interface ip add dns name="$NewIfIndex" addr=$DNSTertiary index=3
+netsh interface ip add dns name="$NewIfIndex" addr=$DNSQuadra index=4
+"@
+    $Exec4 = Invoke-VMScript -ScriptText $DNS4 -VM $VMHostname -GuestCredential $credvalue }
+
+    Start-Sleep -Seconds 2
+
+
+#Removing Old Adapter
+
+
+    $removeNIC = $preVM.ExtensionData.Config.Hardware.Device | where {$_.DeviceInfo.Label -eq $preNetAdapter.Name}
+    $spec = New-Object VMware.Vim.VirtualMachineConfigSpec 
+    $dev = New-Object VMware.Vim.VirtualDeviceConfigSpec
+    $dev.operation = "remove" 
+    $dev.Device = $removeNIC
+    $spec.DeviceChange += $dev
+    $preVM.ExtensionData.ReconfigVM($spec)
+    
+    Function-WriteLog -Message "Network configurations completed, then testing the VM for $VMHostname..." -LogLevel "Info"
+    Function-Check -VMHostname $VMHostname -VMIPAddress $VMIPAddress -snapshot $snapshot
+                          
+
+ } 
+    
+
+    
+    else { Function-WriteLog -Message "New - Get-NetAdapter remote command can't execute on $VMHostname..." -LogLevel "Failure"
+    
+    
+    }
+    
+
+} catch { Function-WriteLog -Message "An error catched during script Function-OperationNIC, check MAC Address for $VMHostname - $_" -LogLevel  "Failure"
+          Write-Output "`n"
+        
+        }
+
+}
+  
+
+
+
+
+Function Function-Check {
+
+              
+              
+        param(
+ 
+               [Parameter(Mandatory=$true)]
+               [string]$VMHostname,
+               [Parameter(Mandatory=$true)]
+               [string]$VMIPAddress,
+               [Parameter(Mandatory=$true)]
+               [VMware.VimAutomation.ViCore.Impl.V1.VIObjectImpl]$snapshot
+   
+               )
+
+Try {
+
+       Function-WriteLog -Message "Testing the new VMXNET-3 Adapter's network configuration..." -LogLevel "Process"
+        
+       $TrustChannelTest = Invoke-Command -ComputerName $VMHostname -Credential $credSYS -ScriptBlock { Hostname }
+       Start-Process -FilePath "ipconfig" -ArgumentList "/flushdns" -NoNewWindow -ErrorAction SilentlyContinue
+       Start-Sleep -Milliseconds 350
+      
+    
+   if($TrustChannelTest -eq $VMHostname){
+
+
+       
+       if(Test-Connection $VMHostname -Count "2" -Delay "3" -ErrorAction SilentlyContinue){
+
+          Function-WriteLog -Message "New VMXNET-3 Adapter has been Successfully configured, VM is Online, snapshot deleting..." -LogLevel "Info"
+          Remove-Snapshot -Snapshot $snapshot -RemoveChildren -Confirm:$false
+          Write-Output "`n"
+          
+          }
+
+
+       elseif (Test-Connection $VMIPAddress -Count "2" -Delay "3" -ErrorAction SilentlyContinue){ 
+               Function-WriteLog -Message "Hostname can't reached but VMXNET-3 IP Address has been online, check DNS Records" -LogLevel "Failure"
+               Write-Output "`n"   
+             
+              }
+
+        elseif (Test-Connection $VMIPAddress -Count "2" -Delay "3" -ErrorAction SilentlyContinue){ 
+               Function-WriteLog -Message "Hostname can't reached but VMXNET-3 IP Address has been online, check DNS Records" -LogLevel "Failure"
+               Write-Output "`n"   
+             
+              }  
+        
+        }
+
+           
+       
+  else { Function-WriteLog -Message "Network has been set, Server might belongs to domains fb.dmz / fe.local / fibagrp.int or check the server network settings"  -LogLevel "Failure"
+         Write-Output "`n"
+                         
+       }
+
+
+
+
+} catch { Function-WriteLog -Message "An error catched during script Function-Check for $VMHostname - $_" -LogLevel  "Failure" }
+
+ 
+}
+
+
+
+
+$vcentercred = Import-Clixml -Path C:\Users\fb009312\Desktop\vcentercred.xml
+$cybercred   = Import-Clixml -Path C:\Users\fb009312\Desktop\cybercred.xml
+$credSYS     = Import-Clixml -Path C:\Users\FB009312\Desktop\credSYS.xml
+$VMs         = Import-Csv -Path "C:\Users\fb009312\Desktop\Servers.csv"
+
+
+#Vcenter Connect
+Function-WriteLog -Message "Preparing to access VCenters..." -LogLevel "Process"
+$gebzeVcenter  =  "fb01svp172vcs01"
+$ankaraVcenter =  "fb02svp172vcs01"
+Connect-VIServer -Server $gebzeVcenter -Credential $vcentercred -ErrorAction Stop
+Connect-VIServer -Server $ankaraVcenter -Credential $vcentercred -ErrorAction Stop
+
+
+
+#Cyberark Connect
+Function-WriteLog -Message "Preparing to access CyberArk session..." -LogLevel "Process"
+Write-Output "`n"
+New-PASSession -Credential $cybercred -BaseURI "https://cyberarkweb.fibabanka.local" -InformationAction SilentlyContinue -ErrorAction Stop
+
+
+
+
+
+foreach ($VM in $VMs){
+
+
+    Try {
+
+  
+        $VMHostname   =  $VM.Hostname
+        Add-Content -Value "`n" -Path "C:\Users\fb009312\Desktop\Logfile NIC Upgrade.txt"
+        Function-WriteLog -Message "Operation starting for $VMHostname..." -LogLevel "Process"
+        
+        $snapstart    =  $null
+        $snapshot     =  $null        
+        $preVM        =  Get-VM $VMHostname -ErrorAction Stop
+        $prenetwork   =  $preVM | Get-NetworkAdapter -ErrorAction Stop
+        $CardVLAN     =  $prenetwork.NetworkName
+        $VMIPAddress  =  $VM.IPAddress
+        $VMSubnet     =  $VM.Subnet
+        $VMGateway    =  $VM.Gateway
+        $DNSPrimary   =  $VM.DNSPrimary
+        $DNSSecondary =  $VM.DNSSecondary
+        $DNSTertiary  =  $VM.DNSTertiary
+        $DNSQuadra    =  $VM.DNSQuadra
+        $VMPortgroup  =  $VM.VLANID
+        $SourceMACAddress = $VM.MacAddress     
+        $VMOwnIP      =  $preVM.Guest.ExtensionData.IpAddress
+        $VMOwnGWpre   =  $preVM.Guest.ExtensionData.IPStack.IpRouteConfig.IpRoute.Gateway.IpAddress
+        $VMOwnGW      =  ($VMOwnGWpre -join ",").Trim(',')
+
+        
+        Function-WriteLog -Message "Getting first VM informations for $VMHostname..." -LogLevel "Process"
+
+
+        #LF ADMIN
+        $VMAccount   =  Get-PASAccount -Keywords "$VMHostname LF" -ErrorAction Stop
+        
+        if($VMAccount.AccountID){
+        
+            Function-WriteLog -Message "The server has found at Cyberark" -LogLevel "Info"
+            $credobject  =  Get-PASAccountPassword -AccountID $VMAccount.AccountID -Reason "VMNIC Upgrade Test"  -ErrorAction Stop
+            Start-Sleep -Milliseconds 900
+            $credvalue   =  $credobject.ToPsCredential()
+  
+  
+            if ($preVM.PowerState -eq "PoweredOn" -and ($prenetwork.Type -eq "e1000" -or $prenetwork.Type -eq "e1000e") -and ($CardVLAN -eq $VMPortgroup) -and ($VMIPAddress -eq $VMOwnIP)){
+
+            #-and ($VMGateway -eq $VMOwnGW)
+            
+   
+         
+                 Function-WriteLog  -Message  "Taking the VM Snapshot for $VMHostname..." -LogLevel "Process"
+                 $snapstart = New-Snapshot -VM $VMHostname -Name "Before the NIC Upgrade" -Memory:$false -Quiesce:$true -Description "for $VMHostname" -ErrorAction SilentlyContinue
+                 Start-Sleep -Milliseconds 700
+                 $snapshot  = Get-Snapshot -VM $VMHostname -Name "Before the NIC Upgrade"
+             
+
+                 if ($snapshot){
+
+                     Function-WriteLog -Message "Snapshot successfully done, then will be adding WMXNET-3 Adapter for $VMHostname" -LogLevel "Info" -ErrorAction SilentlyContinue
+                     Function-OperationNIC -VMHostname $VMHostname -VMIPAddress $VMIPAddress -VMSubnet $VMSubnet -VMGateway $VMGateway -VMPortgroup $VMPortgroup -SourceMACAddress $SourceMACAddress -DNSPrimary $DNSPrimary -DNSSecondary $DNSSecondary -DNSTertiary $DNSTertiary -DNSQuadra $DNSQuadra -credvalue $credvalue -snapshot $snapshot 
+                                      
+                  }       
+                
+                
+
+                else { Function-WriteLog -Message "Snapshot couldn't created for $VMHostname !" -LogLevel "Failure" -ErrorAction SilentlyContinue
+                       Write-Output "`n"
+                       #Disconnect-VIServer -Server $gebzeVcenter -Force
+                       #Disconnect-VIServer -Server $ankaraVcenter -Force                                                 
+                   
+                 }                                                           
+                 
+              }    
+     
+
+           else {  Function-WriteLog -Message "VM's Card Type NOT e1000/e, State Powered-Off, Portgroup or IP Address mismatch. No any operations initiated for $VMHostname" -LogLevel "Failure"
+                   Write-Output "`n"
+                   #Disconnect-VIServer -Server $gebzeVcenter -Force
+                   #Disconnect-VIServer -Server $ankaraVcenter -Force                         
+            }             
+
+        }  
+
+   
+             
+    else{ Function-WriteLog -Message "The server doesn't place on the CyberArk, nothing has changed for $VMHostname" -LogLevel "Failure"
+          Write-Output "`n"             
+                                    
+    }
+                        
+                 
+
+}  catch {  Function-WriteLog -Message "An error catched during the Loop, for $VMHostname - $_" -LogLevel  "Failure"
+            Write-Output "`n"
+            #Disconnect-VIServer -Server $gebzeVcenter -Force
+            #Disconnect-VIServer -Server $ankaraVcenter -Force
+   }
+            
+  
+} 
+
+
+
+
+
+#RDP Checking
+
+foreach ($VMPing in $VMs){
+
+Test-Connection -Delay 1 -Count 1  $VMPing.Hostname }
+
+
+
+foreach ($VMPing in $VMs){
+
+Test-NetConnection -Port 3389  $VMPing.Hostname }
+
+
+
+
+foreach ($VMPing in $VMs){
+
+Invoke-VMScript -VM $VMPing.Hostname -ScriptText "Test-ComputerSecureChannel" -GuestCredential $credSYS
+
+$VMPing.Hostname }
+
+
+
+
+foreach ($VMPing in $VMs){
+
+Invoke-Command -ComputerName $VMPing.Hostname -Credential $credSYS -ScriptBlock {
+
+Test-ComputerSecureChannel
+
+   }
+}
+
+
+
+
+
+
+#$cybercred     =  Get-Credential -Message "Type Credentials to access CyberArk" -InformationAction SilentlyContinue -ErrorAction Stop 
+#$vcentercred   =  Get-Credential -Message "Type Credentials to Access Vcenter" -ErrorAction Stop
+
+#PnpUtil - Scan Device Manager ???
+#ERROR ACTIONS
+#DNS'ler İştiraklerde DMZ'de değişiklik gösterir
+#IPv6 Disable - Mesela Exchange bağımlıdır ayır biryerde yapılmalı
+#Sleep statements? -Wait parametresi
+#snapshot names change
+#Cyberark session names change
+#Snapshot ?
+#VMI ile yapılabilir mi?
+
+
+#Function-IfIndex -VMHostname "FB000SAY01" -creds $creds -ScriptText $scriptText
+#$VMInformations  =  Function-GetInfo -VMHostname "FB000SAY01" -targetMacAddress $targetMacAddress | Select-Object -ExpandProperty VMState
+#Get-OSCustomizationSpec -Name "FB000SAY01" -IpMode UseStaticIP -IpAddress $VMIPAddress -DefaultGateway $VMGateway -SubnetMask $VMSubnet -Dns ? -Position ? -ErrorAction Stop
+#$VMIPAddress    =  $VMState.Guest.ExtensionData.IpAddress           
+#$VMGateway      =  $VMState.Guest.ExtensionData.IPStack.IpRouteConfig.IpRoute.Gateway.IpAddress         
+#$VMSubnet       =  $VMState.Guest.ExtensionData.IPStack.IpRouteConfig.IpRoute
+#$VMSubnet       =  $VMState.Guest.ExtensionData.Net.IpConfig.IpAddress
+#$VMPrefixLenght =  [$VMState.Guest.ExtensionData.Net.IpConfig.IpAddress | Where-Object { $_.PrefixLength -eq 24 }].PrefixLengh
+#$VMIPAddress    =  $VMState.Guest.ExtensionData.Net.IpConfig.IpAddress.IpAddress
+#$VMIPAddress    =  $VMState.Guest.ExtensionData.IpAddress           
+#$VMGateway      =  $VMState.Guest.ExtensionData.IPStack.IpRouteConfig.IpRoute.Gateway.IpAddress           
+#$VMSubnet       =  $VMState.Guest.ExtensionData.IPStack.IpRouteConfig.IpRoute
+#$VMSubnet       =  $VMState.Guest.ExtensionData.Net.IpConfig.IpAddress
+#$VMPrefixLenght =  [$VMState.Guest.ExtensionData.Net.IpConfig.IpAddress | Where-Object { $_.PrefixLength -eq 24 }].PrefixLengh
+
+
+#TEMP ADDRESS
+#$TempIPAddress="10.184.66.59"
+#$TempSubnet="255.255.255.0"
+#$TempGateway="10.184.66.20"
+
+
+#SETTING TEMP NETWORK
+#$ScriptText = @"
+#netsh interface ipv4 set address name=$newInterfaceIndex static $TempIPAddress $TempSubnet $TempGateway
+#netsh interface ip set dns name="$newInterfaceIndex" source=static addr=$DNSPrimary primary
+#netsh interface ip add dns name="$newInterfaceIndex” addr=$DNSSecondary index=2
+#"@
+
+#TEMP DNS ???
+#$tempNetwork=Invoke-VMScript -VM $VMHostname -ScriptText $ScriptText -GuestCredential $creds
+#netsh interface ipv6 set interface "$InterfaceIndex" metric=2 forwarding=disable store=persistent
+
+       #elseif (Start-Process -FilePath "ipconfig" -ArgumentList "/flushdns" -NoNewWindow -ErrorAction SilentlyContinue){ 
+       #       Test-Connection $VMIPAddress -Count "2" -Delay "3" -ErrorAction SilentlyContinue         
+       #       Function-WriteLog -Message "Hostname can't reached but VMXNET-3 IP Address has been Successfully Tested and Add" -LogLevel "Info"
+       #        Write-Output "`n"   
+       # }
+
+
+
+              #Function-WriteLog -Message "Reverting from snapshot" -LogLevel "Process"
+	          #Set-VM -VM $VMHostname -Snapshot $snapshot -Confirm:$false -ErrorAction Stop -InformationAction SilentlyContinue
+              #Start-Sleep -Seconds 3
+              #Start-VM -VM $VMHostname -Confirm:$false -InformationAction SilentlyContinue
+              #$finalstat=Get-VM -Name $VMHostname
+                 
+              #if($finalstat.PowerState -eq "PoweredOn") {
+			
+                 #Function-WriteLog "Message VM Reverted from snapshot and Powered-On" -LogLevel "Info"
+                 #Write-Output "`n"
+                   
+             #}
