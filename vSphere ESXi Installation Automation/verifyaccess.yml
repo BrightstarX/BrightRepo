@@ -1,0 +1,32 @@
+- name: Wait 1 minute after reboot
+  pause:
+    minutes: 1
+
+- name: Check if SSH is available on ESXi host
+  wait_for:
+    host: "{{ server.hostname }}"
+    port: 22
+    state: started
+    timeout: 5
+  register: ssh_check
+  until: ssh_check is succeeded
+  retries: 20
+  delay: 15
+
+- name: Eject ISO from the Server
+  uri:
+    url: "https://{{ target_server.ILOIP }}/redfish/v1/Managers/iDRAC.Embedded.1/VirtualMedia/CD/Actions/VirtualMedia.EjectMedia"
+    method: POST
+    user: "{{ target_server.ILOUSER }}"
+    password: "{{ target_server.ILOPW }}"
+    body_format: json
+    body: {}
+    headers:
+      Content-Type: "application/json"
+    validate_certs: no
+    status_code: [200, 204, 202, 201]
+  register: eject_media_response
+
+- name: Print Eject Media Response
+  debug:
+    var: eject_media_response 

@@ -1,0 +1,18 @@
+- name: Reboot the Server
+  uri:
+    url: "https://{{ server.ILOIP }}/redfish/v1/Systems/System.Embedded.1/Actions/ComputerSystem.Reset"
+    method: POST
+    user: "{{ ILOUSER }}"
+    password: "{{ ILOPW }}"
+    body_format: json
+    body:
+      ResetType: "ForceRestart"
+    headers:
+      Content-Type: "application/json"
+    validate_certs: no
+    status_code: [200, 204, 202, 201]
+  register: reboot_response
+
+- name: Print Reboot Response
+  debug:
+    var: reboot_response

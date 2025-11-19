@@ -1,0 +1,34 @@
+- name: Generating KS file
+  hosts: klssyman01
+  gather_facts: false
+  vars_files:
+    - servers.yml
+    - defaultvars.yml
+
+  tasks:
+    - name: Creating KS configuration file
+      copy:
+        dest: "/tmp/SSY-Intel-ESXiAutomation/ks_{{ server.hostname }}.cfg"
+        content: |
+                    vmaccepteula
+                    clearpart --firstdisk=local --overwritevmfs
+                    install --firstdisk=local --overwritevmfs
+                    rootpw {{ root_password }}
+                    network --bootproto=static --device={{ server.network_device }} --ip={{ server.ip_address }} --netmask={{ server.netmask }} --gateway={{ server.gateway }} --nameserver={{ server.dns_servers }} --hostname={{ server.hostname }}
+                    %firstboot --interpreter=busybox
+                    esxcli network vswitch standard portgroup set -p "Management Network" -v {{ server.vlanid }}
+                    vim-cmd hostsvc/enable_ssh
+                    vim-cmd hostsvc/start_ssh
+                    vim-cmd hostsvc/enable_esx_shell
+                    vim-cmd hostsvc/start_esx_shell
+                    esxcli system ntp set --server={{ server.ntp_server }}
+                    esxcli system ntp set --enabled=true
+                    esxcli system ntp start
+                    esxcli network ip set --ipv6-enabled=false
+                    reboot
+                    %post --interpreter=busybox
+                    reboot
+
+      loop: "{{ servers }}"
+      loop_control:
+        loop_var: server

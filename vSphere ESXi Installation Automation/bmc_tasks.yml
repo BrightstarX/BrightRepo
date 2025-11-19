@@ -1,0 +1,59 @@
+- name: Mount ISO to the Server
+  uri:
+    url: "https://{{ server.ILOIP }}/redfish/v1/Managers/iDRAC.Embedded.1/VirtualMedia/CD/Actions/VirtualMedia.InsertMedia"
+    method: POST
+    user: "{{ ILOUSER }}"
+    password: "{{ ILOPW }}"
+    body_format: json
+    body:
+      Image: "https://10.80.14.42/deneme-bucket/{{ server.hostname }}-VMwareKS.iso"
+      Inserted: true
+    headers:
+      Content-Type: "application/json"
+    validate_certs: no
+    status_code: [200, 204, 202, 201]
+  register: mount_media_response
+
+- name: Print Mount Media Response
+  debug:
+    var: mount_media_response
+
+- name: Set Boot Order
+  uri:
+    url: "https://{{ server.ILOIP }}/redfish/v1/Managers/iDRAC.Embedded.1/Actions/Oem/EID_674_Manager.ImportSystemConfiguration"
+    method: POST
+    user: "{{ ILOUSER }}"
+    password: "{{ ILOPW }}"
+    body_format: json
+    body:
+      ShareParameters:
+        Target: "ALL"
+      ImportBuffer: "<SystemConfiguration><Component FQDD=\"iDRAC.Embedded.1\"><Attribute Name=\"ServerBoot.1#BootOnce\">Enabled</Attribute><Attribute Name=\"ServerBoot.1#FirstBootDevice\">VCD-DVD</Attribute></Component></SystemConfiguration>"
+    headers:
+      Content-Type: "application/json"
+    validate_certs: no
+    status_code: [200, 204, 202, 201]
+  register: boot_order_response
+
+- name: Print Boot Order Response
+  debug:
+    var: boot_order_response
+
+- name: Reboot the Server
+  uri:
+    url: "https://{{ server.ILOIP }}/redfish/v1/Systems/System.Embedded.1/Actions/ComputerSystem.Reset"
+    method: POST
+    user: "{{ ILOUSER }}"
+    password: "{{ ILOPW }}"
+    body_format: json
+    body:
+      ResetType: "ForceRestart"
+    headers:
+      Content-Type: "application/json"
+    validate_certs: no
+    status_code: [200, 204, 202, 201]
+  register: reboot_response
+
+- name: Print Reboot Response
+  debug:
+    var: reboot_response

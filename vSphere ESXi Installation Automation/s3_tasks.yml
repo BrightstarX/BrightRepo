@@ -1,0 +1,15 @@
+- name: Upload ISO to S3
+  shell: |
+    export AWS_ACCESS_KEY_ID={{ aws_access_key }}
+    export AWS_SECRET_ACCESS_KEY={{ aws_secret_key }}
+    aws --endpoint-url {{ s3_endpoint }} \
+        s3 cp "/tmp/SSY-Intel-ESXiAutomation/{{ server.hostname }}-VMwareKS.iso" \
+        s3://{{ s3_bucket }}/{{ server.hostname }}-VMwareKS.iso \
+        --no-verify-ssl
+  args:
+    executable: /bin/bash
+  register: upload_result
+
+- name: Show Upload S3 Results
+  debug:
+    var: upload_result

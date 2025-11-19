@@ -1,0 +1,13 @@
+- name: Prepare VMware ISO with custom KS
+  hosts: klssyman01
+  gather_facts: false
+  vars_files:
+    - servers.yml
+    - defaultvars.yml
+
+  tasks:
+    - name: Process each server
+      include_tasks: verifyaccess.yml
+      loop: "{{ servers }}"
+      loop_control:
+        loop_var: server

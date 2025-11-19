@@ -1,0 +1,21 @@
+- name: Eject Media
+  uri:
+    url: "https://{{ server.ILOIP }}/redfish/v1/Managers/iDRAC.Embedded.1/VirtualMedia/CD/Actions/VirtualMedia.EjectMedia"
+    method: POST
+    user: "{{ ILOUSER }}"
+    password: "{{ ILOPW }}"
+    body_format: json
+    body: {}
+    headers:
+      Content-Type: "application/json"
+    validate_certs: no
+    status_code: [200, 400, 500]
+  register: eject_media_response
+  failed_when: false  # Görev hata alsa bile fail sayma
+
+- name: Print Eject Media Response
+  debug:
+    msg: >
+      Eject Media Result: 
+      Status: {{ eject_media_response.status }},
+      Message: {{ eject_media_response.json.error.message | default('No Message Response') }}

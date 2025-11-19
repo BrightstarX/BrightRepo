@@ -1,0 +1,25 @@
+- name: Ensure VMware main folder
+  file:
+    path: "{{ vmware_folder }}"
+    state: directory
+
+- name: Move ks.cfg to VMware ISO folder (on remote)
+  copy:
+    src: "/tmp/SSY-Intel-ESXiAutomation/ks_{{ server.hostname }}.cfg"
+    dest: "{{ vmware_folder }}/ks.cfg"
+    remote_src: true
+
+- name: Create ISO from custom VMware folder
+  command: >
+    mkisofs -o "/tmp/SSY-Intel-ESXiAutomation/{{ server.hostname }}-VMwareKS.iso" -V "VMWARE_CFG" -J -R {{ vmware_folder }}
+  register: iso_result
+  ignore_errors: true
+
+- name: Show ISO creation result
+  debug:
+    var: iso_result.stdout_lines
+
+- name: Remove ks.cfg after ISO - Ana dosya
+  file:
+    path: "{{ vmware_folder }}/ks.cfg"
+    state: absent

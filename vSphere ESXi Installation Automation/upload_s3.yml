@@ -1,0 +1,13 @@
+- name: Main upload to S3
+  hosts: klssyman01
+  become: true
+  vars_files:
+    - servers.yml
+    - defaultvars.yml
+
+  tasks:
+    - name: Upload each ISO to S3
+      include_tasks: s3_tasks.yml
+      loop: "{{ servers }}"
+      loop_control:
+        loop_var: server
