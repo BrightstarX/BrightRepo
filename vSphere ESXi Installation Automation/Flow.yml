@@ -1,5 +1,5 @@
 - name: ESXi Installation Final
-  hosts: klssyman01
+  hosts: ansibleserver_hostname
   gather_facts: no
   vars_files:
     - servers.yml
