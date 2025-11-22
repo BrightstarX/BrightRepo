@@ -6,7 +6,7 @@
     password: "{{ ILOPW }}"
     body_format: json
     body:
-      Image: "https://10.80.14.42/deneme-bucket/{{ server.hostname }}-VMwareKS.iso"
+      Image: "https://S3-IP/deneme-bucket/{{ server.hostname }}-VMwareKS.iso"
       Inserted: true
     headers:
       Content-Type: "application/json"
