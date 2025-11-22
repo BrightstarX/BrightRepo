@@ -1,5 +1,5 @@
 - name: Bulk Reboot
-  hosts: klssyman01
+  hosts: ansibleserver_hostname
   gather_facts: false
   vars_files:
     - servers.yml
