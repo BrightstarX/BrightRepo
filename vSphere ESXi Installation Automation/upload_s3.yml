@@ -1,5 +1,5 @@
 - name: Main upload to S3
-  hosts: klssyman01
+  hosts: ansibleserver_hostname
   become: true
   vars_files:
     - servers.yml
