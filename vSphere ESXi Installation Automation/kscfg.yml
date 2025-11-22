@@ -1,5 +1,5 @@
 - name: Generating KS file
-  hosts: klssyman01
+  hosts: ansibleserver_hostname
   gather_facts: false
   vars_files:
     - servers.yml
@@ -8,7 +8,7 @@
   tasks:
     - name: Creating KS configuration file
       copy:
-        dest: "/tmp/SSY-Intel-ESXiAutomation/ks_{{ server.hostname }}.cfg"
+        dest: "/tmp/ks_{{ server.hostname }}.cfg"
         content: |
                     vmaccepteula
                     clearpart --firstdisk=local --overwritevmfs
