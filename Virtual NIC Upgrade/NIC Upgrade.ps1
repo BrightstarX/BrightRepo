@@ -22,7 +22,7 @@ Function Function-WriteLog {
            )
 
       $LogEntry   =   "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | $Message | $LogLevel "
-      $LogFile = "C:\Users\fb009312\Desktop\Logfile NIC Upgrade.txt"
+      $LogFile = "C:\Users\Desktop\Logfile NIC Upgrade.txt"
 
 
      if ($LogLevel -eq "Info") { 
@@ -313,16 +313,16 @@ Try {
 
 
 
-$vcentercred = Import-Clixml -Path C:\Users\fb009312\Desktop\vcentercred.xml
-$cybercred   = Import-Clixml -Path C:\Users\fb009312\Desktop\cybercred.xml
-$credSYS     = Import-Clixml -Path C:\Users\FB009312\Desktop\credSYS.xml
-$VMs         = Import-Csv -Path "C:\Users\fb009312\Desktop\Servers.csv"
+$vcentercred = Import-Clixml -Path C:\Users\Desktop\vcentercred.xml
+$cybercred   = Import-Clixml -Path C:\Users\Desktop\cybercred.xml
+$credSYS     = Import-Clixml -Path C:\Users\Desktop\credSYS.xml
+$VMs         = Import-Csv -Path "C:\Users\Desktop\Servers.csv"
 
 
 #Vcenter Connect
 Function-WriteLog -Message "Preparing to access VCenters..." -LogLevel "Process"
-$gebzeVcenter  =  "fb01svp172vcs01"
-$ankaraVcenter =  "fb02svp172vcs01"
+$gebzeVcenter  =  "primaryvCenter hostname without FQDN"
+$ankaraVcenter =  "secondaryvCenter hostname without FQDN"
 Connect-VIServer -Server $gebzeVcenter -Credential $vcentercred -ErrorAction Stop
 Connect-VIServer -Server $ankaraVcenter -Credential $vcentercred -ErrorAction Stop
 
@@ -331,7 +331,7 @@ Connect-VIServer -Server $ankaraVcenter -Credential $vcentercred -ErrorAction St
 #Cyberark Connect
 Function-WriteLog -Message "Preparing to access CyberArk session..." -LogLevel "Process"
 Write-Output "`n"
-New-PASSession -Credential $cybercred -BaseURI "https://cyberarkweb.fibabanka.local" -InformationAction SilentlyContinue -ErrorAction Stop
+New-PASSession -Credential $cybercred -BaseURI "https://cyberarkweb.mycompany.local" -InformationAction SilentlyContinue -ErrorAction Stop
 
 
 
@@ -344,7 +344,7 @@ foreach ($VM in $VMs){
 
   
         $VMHostname   =  $VM.Hostname
-        Add-Content -Value "`n" -Path "C:\Users\fb009312\Desktop\Logfile NIC Upgrade.txt"
+        Add-Content -Value "`n" -Path "C:\Users\Desktop\Logfile NIC Upgrade.txt"
         Function-WriteLog -Message "Operation starting for $VMHostname..." -LogLevel "Process"
         
         $snapstart    =  $null
@@ -482,20 +482,10 @@ Test-ComputerSecureChannel
 #$cybercred     =  Get-Credential -Message "Type Credentials to access CyberArk" -InformationAction SilentlyContinue -ErrorAction Stop 
 #$vcentercred   =  Get-Credential -Message "Type Credentials to Access Vcenter" -ErrorAction Stop
 
-#PnpUtil - Scan Device Manager ???
-#ERROR ACTIONS
-#DNS'ler İştiraklerde DMZ'de değişiklik gösterir
-#IPv6 Disable - Mesela Exchange bağımlıdır ayır biryerde yapılmalı
-#Sleep statements? -Wait parametresi
-#snapshot names change
-#Cyberark session names change
-#Snapshot ?
-#VMI ile yapılabilir mi?
 
-
-#Function-IfIndex -VMHostname "FB000SAY01" -creds $creds -ScriptText $scriptText
-#$VMInformations  =  Function-GetInfo -VMHostname "FB000SAY01" -targetMacAddress $targetMacAddress | Select-Object -ExpandProperty VMState
-#Get-OSCustomizationSpec -Name "FB000SAY01" -IpMode UseStaticIP -IpAddress $VMIPAddress -DefaultGateway $VMGateway -SubnetMask $VMSubnet -Dns ? -Position ? -ErrorAction Stop
+#Function-IfIndex -VMHostname "VM" -creds $creds -ScriptText $scriptText
+#$VMInformations  =  Function-GetInfo -VMHostname "VM" -targetMacAddress $targetMacAddress | Select-Object -ExpandProperty VMState
+#Get-OSCustomizationSpec -Name "VM" -IpMode UseStaticIP -IpAddress $VMIPAddress -DefaultGateway $VMGateway -SubnetMask $VMSubnet -Dns ? -Position ? -ErrorAction Stop
 #$VMIPAddress    =  $VMState.Guest.ExtensionData.IpAddress           
 #$VMGateway      =  $VMState.Guest.ExtensionData.IPStack.IpRouteConfig.IpRoute.Gateway.IpAddress         
 #$VMSubnet       =  $VMState.Guest.ExtensionData.IPStack.IpRouteConfig.IpRoute
@@ -510,9 +500,9 @@ Test-ComputerSecureChannel
 
 
 #TEMP ADDRESS
-#$TempIPAddress="10.184.66.59"
+#$TempIPAddress="TempIP"
 #$TempSubnet="255.255.255.0"
-#$TempGateway="10.184.66.20"
+#$TempGateway="TempGW"
 
 
 #SETTING TEMP NETWORK
