@@ -1,4 +1,4 @@
-- name: Ensure VMware main folder
+- name: Ensure VMware main folder exist
   file:
     path: "{{ vmware_folder }}"
     state: directory
