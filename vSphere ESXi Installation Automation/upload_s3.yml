@@ -1,4 +1,4 @@
-- name: Main file uploading to S3
+- name: Main task, uploading file to S3
   hosts: ansibleserver_hostname
   become: true
   vars_files:
