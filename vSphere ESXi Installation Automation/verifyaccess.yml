@@ -1,4 +1,4 @@
-- name: Wait 1 minute after reboot
+- name: Waiting 1 min, after force reboot
   pause:
     minutes: 1
 
