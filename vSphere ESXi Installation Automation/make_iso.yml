@@ -1,4 +1,4 @@
-- name: Prepare VMware ISO with custom KS
+- name: Prepare VMware ISO with custom Kickstart desires
   hosts: ansibleserver_hostname
   gather_facts: false
   vars_files:
