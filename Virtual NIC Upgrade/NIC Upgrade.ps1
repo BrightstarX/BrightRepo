@@ -1,17 +1,13 @@
 ﻿# Virtual NIC Card Upgrading Script without downtime on OS and VMware Platform.
 # Author : * Halil İbrahim Karabacak *
 # For more information, read the readme.txt.
-
+# You can reach out for any questions or advices -> mvp.halil@outlook.com
 
 cls
-
 $module      = "VMware.VimAutomation.Core"
 
 if (Get-Module -Name $module) {} else {Import-Module  $module
     Get-Module -Name $module }
-
-
-
 
 Function Function-WriteLog {
 
@@ -47,10 +43,7 @@ Function Function-WriteLog {
 
 
 
-
-
 Function Function-OperationNIC {
-
            
       param(
  
@@ -106,9 +99,7 @@ Try {
     else{Function-WriteLog -Message "Old Interface Index couldn't collected, nothing changed, snapshot deleting for $VMHostname" -LogLevel "Failure"
          Remove-Snapshot -Snapshot $snapshot 
 
-    }
-
- 
+    } 
 
  #Here Temporary
  #$VMHostname="FB000OFS03"
@@ -130,9 +121,7 @@ Try {
     $DNSCount = $resultDNS.ServerAddresses.Length
 
 
-
-
-    
+   
 #New VMXNET3 Card Adding
 
     If($preNetAdapter)  {
@@ -243,12 +232,7 @@ netsh interface ip add dns name="$NewIfIndex" addr=$DNSQuadra index=4
 }
   
 
-
-
-
-Function Function-Check {
-
-              
+Function Function-Check {             
               
         param(
  
@@ -271,9 +255,7 @@ Try {
       
     
    if($TrustChannelTest -eq $VMHostname){
-
-
-       
+     
        if(Test-Connection $VMHostname -Count "2" -Delay "3" -ErrorAction SilentlyContinue){
 
           Function-WriteLog -Message "New VMXNET-3 Adapter has been Successfully configured, VM is Online, snapshot deleting..." -LogLevel "Info"
@@ -305,14 +287,10 @@ Try {
        }
 
 
-
-
 } catch { Function-WriteLog -Message "An error catched during script Function-Check for $VMHostname - $_" -LogLevel  "Failure" }
 
  
 }
-
-
 
 
 $vcentercred = Import-Clixml -Path C:\Users\Desktop\vcentercred.xml
@@ -334,9 +312,6 @@ Connect-VIServer -Server $ankaraVcenter -Credential $vcentercred -ErrorAction St
 Function-WriteLog -Message "Preparing to access CyberArk session..." -LogLevel "Process"
 Write-Output "`n"
 New-PASSession -Credential $cybercred -BaseURI "https://cyberarkweb.mycompany.local" -InformationAction SilentlyContinue -ErrorAction Stop
-
-
-
 
 
 foreach ($VM in $VMs){
@@ -440,9 +415,6 @@ foreach ($VM in $VMs){
 } 
 
 
-
-
-
 #RDP Checking
 
 foreach ($VMPing in $VMs){
@@ -456,14 +428,11 @@ foreach ($VMPing in $VMs){
 Test-NetConnection -Port 3389  $VMPing.Hostname }
 
 
-
-
 foreach ($VMPing in $VMs){
 
 Invoke-VMScript -VM $VMPing.Hostname -ScriptText "Test-ComputerSecureChannel" -GuestCredential $credSYS
 
 $VMPing.Hostname }
-
 
 
 
@@ -477,9 +446,7 @@ Test-ComputerSecureChannel
 }
 
 
-
-
-
+# Quotes
 
 #$cybercred     =  Get-Credential -Message "Type Credentials to access CyberArk" -InformationAction SilentlyContinue -ErrorAction Stop 
 #$vcentercred   =  Get-Credential -Message "Type Credentials to Access Vcenter" -ErrorAction Stop
