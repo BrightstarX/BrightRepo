@@ -1,5 +1,7 @@
-﻿#VMWARE NIC CARD UPGRADE SCRIPT
-#Halil İbrahim Karabacak
+﻿# Virtual NIC Card Upgrading Script without downtime on OS and VMware Platform.
+# Author : * Halil İbrahim Karabacak *
+# For more information, read the readme.txt.
+
 
 cls
 
