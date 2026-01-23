@@ -1,6 +1,7 @@
 # Zero-Downtime Windows Servers, VMXNET3 Network Interface Adapter Upgrade
 
-# Author : * Halil Ibrahim Karabacak *
+# Author :  Halil Ibrahim Karabacak
+# You could directly reach me out for any questions or advices --> mvp.halil@outlook.com
 
 This repository provides an automated and zero-downtime workflow for upgrading windows virtual machines from **E1000 / E1000e** network adapters to **VMXNET3** on VMware vSphere environments.
 
